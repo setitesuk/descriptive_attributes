@@ -7,9 +7,7 @@ on:
 jobs:
   setup-variables:
     if: ${{ !startsWith(github.event.head_commit.message, 'WIP') }}
-    runs-on: ubuntu:22.04
-    container:
-      image: ubuntu:22.04
+    runs-on: ubuntu-latest
     outputs:
       filename_now: ${{steps.set_vars.outputs.filename_now}}
       iso_now: ${{steps.set_vars.outputs.iso_now}}
@@ -28,8 +26,6 @@ jobs:
   run_unit_tests:
     if: ${{ !startsWith(github.event.head_commit.message, 'WIP') }}
     runs-on: python:3.10.13-bullseye
-    container:
-      image: python:3.10.13-bullseye
     needs: setup-variables
     env:
       OUTPUT_FILE: "outputs/${{github.job}}_output.txt"
