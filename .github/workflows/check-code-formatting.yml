@@ -7,7 +7,7 @@ on:
 jobs:
   setup-variables:
     if: ${{ !startsWith(github.event.head_commit.message, 'WIP') }}
-    runs-on: [self-hosted, aws-clinical-dev-runner]
+    runs-on: ubuntu:22.04
     container:
       image: ubuntu:22.04
     outputs:
@@ -28,7 +28,7 @@ jobs:
   check-code-formatters:
     if: ${{ !startsWith(github.event.head_commit.message, 'WIP') }}
     needs: setup-variables
-    runs-on: [self-hosted, aws-clinical-dev-runner]
+    runs-on: python:3.10.13-bullseye
     container:
       image: python:3.10.13-bullseye
     env:

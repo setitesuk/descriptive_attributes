@@ -7,7 +7,7 @@ on:
 jobs:
   setup-variables:
     if: ${{ !startsWith(github.event.head_commit.message, 'WIP') }}
-    runs-on: [self-hosted, aws-clinical-dev-runner]
+    runs-on: ubuntu:22.04
     container:
       image: ubuntu:22.04
     outputs:
@@ -22,7 +22,7 @@ jobs:
           echo "iso_now=$(date +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
   create_tag_if_toml_updated:
     if: ${{ !startsWith(github.event.head_commit.message, 'WIP') }}
-    runs-on: [self-hosted, aws-clinical-dev-runner]
+    runs-on: python:3.10.13-bullseye
     container:
       image: python:3.10.13-bullseye
     needs: setup-variables

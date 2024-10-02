@@ -7,7 +7,7 @@ on:
 jobs:
   setup-variables:
     if: ${{ !startsWith(github.event.head_commit.message, 'WIP') }}
-    runs-on: [self-hosted, aws-clinical-dev-runner]
+    runs-on: ubuntu:22.04
     container:
       image: ubuntu:22.04
     outputs:
@@ -27,7 +27,7 @@ jobs:
           echo "artifact_name=${{steps.set_vars.outputs.filename_now}}-${{github.event.repository.name}}-${{github.workflow}}-${{github.sha}}" >> $GITHUB_OUTPUT
   run_unit_tests:
     if: ${{ !startsWith(github.event.head_commit.message, 'WIP') }}
-    runs-on: [self-hosted, aws-clinical-dev-runner]
+    runs-on: python:3.10.13-bullseye
     container:
       image: python:3.10.13-bullseye
     needs: setup-variables
