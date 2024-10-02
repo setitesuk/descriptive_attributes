@@ -1,0 +1,123 @@
+name: create_tag_if_toml_updated
+run-name: ${{ github.actor }} is creating a tag if required
+on:
+  push:
+    branches:
+      - main
+jobs:
+  setup-variables:
+    if: ${{ !startsWith(github.event.head_commit.message, 'WIP') }}
+    runs-on: [self-hosted, aws-clinical-dev-runner]
+    container:
+      image: ubuntu:22.04
+    outputs:
+      filename_now: ${{steps.set_vars.outputs.filename_now}}
+      iso_now: ${{steps.set_vars.outputs.iso_now}}
+    steps:
+      - name: set variables
+        id: set_vars
+        shell: bash
+        run: |
+          echo "filename_now=$(date +'%Y%m%dT%H%M%S')" >> $GITHUB_OUTPUT
+          echo "iso_now=$(date +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+  create_tag_if_toml_updated:
+    if: ${{ !startsWith(github.event.head_commit.message, 'WIP') }}
+    runs-on: [self-hosted, aws-clinical-dev-runner]
+    container:
+      image: python:3.10.13-bullseye
+    needs: setup-variables
+    env:
+      OUTPUT_FILE: "outputs/${{github.job}}_output.txt"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Local info
+        run: |
+          pwd
+          ls -lha
+          ls /__w/descriptive_attributes/descriptive_attributes
+      - name: Get changed pyproject.toml file
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            pyproject.toml
+      - name: create directory for output
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: mkdir -p outputs
+      - name: Dump github context
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run:   echo "$GITHUB_CONTEXT" > outputs/github_context.txt
+        shell: bash
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: set up file header block
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          echo "*********************" >> $OUTPUT_FILE
+          echo "workflow information" >> $OUTPUT_FILE
+          echo "workflow: ${{github.workflow}}" >> $OUTPUT_FILE
+          echo "job: ${{github.job}}" >> $OUTPUT_FILE
+          echo "github_actor: ${{github.actor}}" >> $OUTPUT_FILE
+          echo "timestamp: ${{needs.setup-variables.outputs.iso_now}}" >> $OUTPUT_FILE
+          echo "*********************" >> $OUTPUT_FILE
+      - name: Install requirements
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: check all files match black standards
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          python3 -m black src/ --check 2>&1 >> $OUTPUT_FILE && \
+          echo "Passes Black Check OK" >> $OUTPUT_FILE || \
+          (echo "Fails Black Check" >> $OUTPUT_FILE && cat $OUTPUT_FILE && exit 1)
+      - name: check all files match pylint standards
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          pylint src/ 2>&1 >> $OUTPUT_FILE && \
+          echo "Passes Pylint Check OK" >> $OUTPUT_FILE || \
+          (echo "Fails Pylint Check" >> $OUTPUT_FILE && cat $OUTPUT_FILE && exit 1)
+      - name: check all files where typing has been applied do not break
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          mypy src/* >> $OUTPUT_FILE && \
+          echo "Passes mypy typing Check OK" >> $OUTPUT_FILE || \
+          (echo "Fails mypy typing Check" >> $OUTPUT_FILE && cat $OUTPUT_FILE && exit 1)
+      - name: run pytest
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          echo "${{ github.actor }} is running the unit tests" >> $OUTPUT_FILE
+          pytest --cov-branch --cov-report html:outputs/cov_html --cov=src -v 2>&1 >> $OUTPUT_FILE && \
+          (echo "Passed all unit tests OK" >> $OUTPUT_FILE && cat $OUTPUT_FILE) || \
+          (echo "Failed unit tests" >> $OUTPUT_FILE && cat $OUTPUT_FILE && exit 1)
+
+      - name: pyproject.toml version
+        if: steps.changed-files.outputs.any_changed == 'true'
+        id: pyproject-toml-version
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
+        run: |
+          VERSION=`cat pyproject.toml | grep ^version | cut -d '"' -f 2  | sed 's/v//g'`
+          echo $VERSION
+          echo "tag_version=v$VERSION" >> $GITHUB_OUTPUT
+          VERSION=`cat pyproject.toml | grep ^version | cut -d '"' -f 2  | sed 's/v//g' | sed 's/\./_/g'`
+          echo "report_artifact_name=report_${{needs.setup-variables.outputs.filename_now}}-${{github.event.repository.name}}-$VERSION" >> $GITHUB_OUTPUT
+      - name: Upload Reports
+        if: steps.changed-files.outputs.any_changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{steps.pyproject-toml-version.outputs.report_artifact_name}}
+          path: outputs
+      - name: Create tag
+        if: steps.changed-files.outputs.any_changed == 'true'
+        uses: actions/github-script@v5
+        with:
+          script: |
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'refs/tags/${{steps.pyproject-toml-version.outputs.tag_version}}',
+              sha: context.sha
+            })

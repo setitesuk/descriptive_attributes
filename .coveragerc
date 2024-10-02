@@ -1,0 +1,6 @@
+[run]
+omit =
+    **/*test*
+    **/test/**
+    **/tests/**
+    src/queries.py
