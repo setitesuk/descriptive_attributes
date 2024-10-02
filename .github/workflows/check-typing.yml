@@ -26,7 +26,7 @@ jobs:
   check-typing:
     if: ${{ !startsWith(github.event.head_commit.message, 'WIP') }}
     needs: setup-variables
-    runs-on: python:3.10.13-bullseye
+    runs-on: ubuntu-latest
     env:
       OUTPUT_FILE: "outputs/${{github.job}}_output.txt"
     steps:
